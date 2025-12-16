@@ -825,6 +825,7 @@
 +
 +                this.currentTickStart = tickStart;
 +                ++MinecraftServer.currentTick;
++                this.server.cardboard$tickMinigameService();
 +                // Paper end - improve tick loop
  
                  boolean flag = l == 0L;

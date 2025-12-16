@@ -5,6 +5,7 @@
  import org.slf4j.Logger;
  
 +// CraftBukkit start
++import io.cardboardmc.scoreboard.ScoreboardOutboundRateLimiter;
 +import io.papermc.paper.adventure.PaperAdventure; // Paper
 +import net.minecraft.world.inventory.Slot;
 +import net.minecraft.world.phys.HitResult;
@@ -70,6 +71,7 @@
 +    // CraftBukkit end
      private @Nullable RemoteChatSession chatSession;
 +    private boolean hasLoggedExpiry = false; // Paper - Prevent causing expired keys from impacting new joins
++    public final ScoreboardOutboundRateLimiter cardboard$scoreboardOutboundRateLimiter = new ScoreboardOutboundRateLimiter();
      private SignedMessageChain.Decoder signedMessageDecoder;
      private final LastSeenMessagesValidator lastSeenMessages = new LastSeenMessagesValidator(20);
      private int nextChatIndex;
@@ -112,8 +114,9 @@
              this.keepConnectionAlive();
              this.chatSpamThrottler.tick();
              this.dropSpamThrottler.tick();
-+            this.tabSpamThrottler.tick(); // Paper - configurable tab spam limits
-+            this.recipeSpamPackets.tick(); // Paper - auto recipe limit
++            this.cardboard$scoreboardOutboundRateLimiter.tickAndFlush(net.minecraft.server.MinecraftServer.currentTick, packet -> this.connection.send(packet, null));
+             this.tabSpamThrottler.tick(); // Paper - configurable tab spam limits
+             this.recipeSpamPackets.tick(); // Paper - auto recipe limit
              if (this.player.getLastActionTime() > 0L
                  && this.server.playerIdleTimeout() > 0
                  && Util.getMillis() - this.player.getLastActionTime() > TimeUnit.MINUTES.toMillis(this.server.playerIdleTimeout())
