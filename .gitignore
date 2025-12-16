@@ -42,6 +42,8 @@ out/
 run/
 logs/
 
+dev.md
+
 !gradle/wrapper/gradle-wrapper.jar
 
 test-plugin.settings.gradle.kts

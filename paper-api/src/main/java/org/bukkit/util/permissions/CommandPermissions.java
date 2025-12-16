@@ -19,6 +19,12 @@ public final class CommandPermissions {
         DefaultPermissions.registerPermission(PREFIX + "reload", "Allows the user to reload the server settings", PermissionDefault.OP, commands);
         DefaultPermissions.registerPermission(PREFIX + "version", "Allows the user to view the version of the server", PermissionDefault.TRUE, commands);
 
+        DefaultPermissions.registerPermission(PREFIX + "tps", "Allows the user to view the server ticks per second", PermissionDefault.OP, commands);
+        DefaultPermissions.registerPermission(PREFIX + "tpsmemory", "Allows the user to view server memory usage via /tps mem", PermissionDefault.OP, commands);
+        DefaultPermissions.registerPermission(PREFIX + "tpsentities", "Allows the user to view entity statistics via /tps entities", PermissionDefault.OP, commands);
+        DefaultPermissions.registerPermission(PREFIX + "tpschunks", "Allows the user to view chunk statistics via /tps chunks", PermissionDefault.OP, commands);
+        DefaultPermissions.registerPermission(PREFIX + "tpsgc", "Allows the user to view garbage collector statistics via /tps gc", PermissionDefault.OP, commands);
+
         commands.recalculatePermissibles();
         return commands;
     }
