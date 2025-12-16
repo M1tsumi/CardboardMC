@@ -1,100 +1,75 @@
-Paper [![Paper Build Status](https://img.shields.io/github/actions/workflow/status/PaperMC/Paper/build.yml?branch=main)](https://github.com/PaperMC/Paper/actions)
-[![Discord](https://img.shields.io/discord/289587909051416579.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/papermc)
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/papermc?label=GitHub%20Sponsors)](https://github.com/sponsors/PaperMC)
-[![Open Collective](https://img.shields.io/opencollective/all/papermc?label=OpenCollective%20Sponsors)](https://opencollective.com/papermc)
-===========
 
-The most widely used, high-performance Minecraft server that aims to fix gameplay and mechanics inconsistencies.
+# CardboardMC
 
+CardboardMC is a Paper fork aimed at making day-to-day server operation smoother: better performance headroom where it matters, clearer visibility when something is going wrong, and small quality-of-life features that reduce guesswork.
 
-**Support and Project Discussion:**
-- [Our forums](https://forums.papermc.io/) or [Discord](https://discord.gg/papermc)
+This repository contains the full source for `paper-api` and `paper-server`.
 
-How To (Server Admins)
-------
-Paperclip is a jar file that you can download and run just like a normal jar file.
+## Notable changes
 
-Download Paper from our [downloads page](https://papermc.io/downloads/paper).
+### Expanded `/tps` monitoring
 
-Run the Paperclip jar directly from your server. Just like old times
+`/tps` still shows TPS for `1m, 5m, 15m`, and now also supports:
 
-* Documentation on using Paper: [docs.papermc.io](https://docs.papermc.io)
-* For a sneak peek at upcoming features, [see here](https://github.com/PaperMC/Paper/projects)
+- `/tps mem`
+  - Shows JVM memory usage.
+  - Permission: `bukkit.command.tpsmemory`
+- `/tps entities`
+  - Shows total entities, block entities, tickable block entities, and players.
+  - Includes a per-world breakdown.
+  - Permission: `bukkit.command.tpsentities`
+- `/tps chunks`
+  - Shows total loaded chunks and a per-world breakdown.
+  - Permission: `bukkit.command.tpschunks`
+- `/tps gc`
+  - Shows total GC collection count/time, plus deltas since the last `/tps gc`.
+  - Permission: `bukkit.command.tpsgc`
 
-How To (Plugin Developers)
-------
-* See our API [here](paper-api)
-* See upcoming, pending, and recently added API [here](https://github.com/orgs/PaperMC/projects/2/views/4)
-* Paper API javadocs here: [papermc.io/javadocs](https://papermc.io/javadocs/)
-#### Repository (for paper-api)
-##### Maven
+### Memory management tools
 
-```xml
-<repository>
-    <id>papermc</id>
-    <url>https://repo.papermc.io/repository/maven-public/</url>
-</repository>
+- `/cardboard unloadchunks <world> [radius] [safe]`
+  - Requests chunk unloads to free memory in the specified world.
+  - Optional `radius` keeps chunks around world spawn loaded.
+  - `safe` defaults to `true` (save before unload). Set `false` to skip saving.
+  - Permission: `cardboard.command.unloadchunks`
+
+### Batch operation tools
+
+- `/cardboard cleanupentities <world> [all|items|projectiles|stands|display|xp]`
+  - Bulk removes entities by category to reduce memory and tick load.
+  - Permission: `cardboard.command.cleanupentities`
+
+- `/cardboard batchteleport <world> <x> <y> <z> [batchSize] [intervalTicks]`
+  - Teleports players in batches to avoid chunk-send spikes.
+  - Permission: `cardboard.command.batchteleport`
+
+- `/cardboard batchteleportcancel`
+  - Cancels an active batched teleport.
+  - Permission: `cardboard.command.batchteleport`
+
+## Building from source
+
+To compile CardboardMC, you need JDK 21 and an internet connection.
+
+From the repository root:
+
+```bash
+./gradlew applyPatches
+./gradlew createMojmapBundlerJar
 ```
 
-```xml
-<dependency>
-    <groupId>io.papermc.paper</groupId>
-    <artifactId>paper-api</artifactId>
-    <version>1.21.11-R0.1-SNAPSHOT</version>
-    <scope>provided</scope>
-</dependency>
-```
-##### Gradle
-```kotlin
-repositories {
-    maven {
-        url = uri("https://repo.papermc.io/repository/maven-public/")
-    }
-}
+You can find the compiled output in `paper-server/build/libs`.
 
-dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-}
+To see available tasks:
 
-java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
-}
+```bash
+./gradlew tasks
 ```
 
-How To (Compiling Jar From Source)
-------
-To compile Paper, you need JDK 21 and an internet connection.
+## Contributing
 
-Clone this repo, run `./gradlew applyPatches`, then `./gradlew createMojmapBundlerJar` from your terminal. You can find the compiled jar in the `paper-server/build/libs` directory.
+See `CONTRIBUTING.md`.
 
-To get a full list of tasks, run `./gradlew tasks`.
+## Credits
 
-How To (Pull Request)
-------
-See [Contributing](CONTRIBUTING.md)
-
-Old Versions (1.21.3 and below)
-------
-For branches of versions 1.8-1.21.3, please see our [archive repository](https://github.com/PaperMC/Paper-archive).
-
-Support Us
-------
-First of all, thank you for considering helping out, we really appreciate that!
-
-PaperMC has various recurring expenses, mostly related to infrastructure. Paper uses [Open Collective](https://opencollective.com/) via the [Open Source Collective fiscal host](https://opencollective.com/opensource) to manage expenses. Open Collective allows us to be extremely transparent, so you can always see how your donations are used. You can read more about financially supporting PaperMC [on our website](https://papermc.io/sponsors).
-
-You can find our collective [here](https://opencollective.com/papermc), or you can donate via GitHub Sponsors [here](https://github.com/sponsors/PaperMC), which will also go towards the collective.
-
-Special Thanks To:
--------------
-
-[![YourKit-Logo](https://www.yourkit.com/images/yklogo.png)](https://www.yourkit.com/)
-
-[YourKit](https://www.yourkit.com/), makers of the outstanding java profiler, support open source projects of all kinds with their full featured [Java](https://www.yourkit.com/java/profiler) and [.NET](https://www.yourkit.com/.net/profiler) application profilers. We thank them for granting Paper an OSS license so that we can make our software the best it can be.
-
-[<img src="https://user-images.githubusercontent.com/21148213/121807008-8ffc6700-cc52-11eb-96a7-2f6f260f8fda.png" alt="" width="150">](https://www.jetbrains.com)
-
-[JetBrains](https://www.jetbrains.com/), creators of the IntelliJ IDEA, supports Paper with one of their [Open Source Licenses](https://www.jetbrains.com/opensource/). IntelliJ IDEA is the recommended IDE for working with Paper, and most of the Paper team uses it.
-
-All our sponsors!  
-[![Sponsor Image](https://raw.githubusercontent.com/PaperMC/papermc.io/data/sponsors.png)](https://papermc.io/sponsors)
+CardboardMC is based on Paper and inherits upstream licensing and attribution. See `LICENSE.md` and `paper-server/LICENCE.txt`.
