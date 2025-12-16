@@ -25,6 +25,28 @@ This repository contains the full source for `paper-api` and `paper-server`.
   - Shows total GC collection count/time, plus deltas since the last `/tps gc`.
   - Permission: `bukkit.command.tpsgc`
 
+### Memory management tools
+
+- `/cardboard unloadchunks <world> [radius] [safe]`
+  - Requests chunk unloads to free memory in the specified world.
+  - Optional `radius` keeps chunks around world spawn loaded.
+  - `safe` defaults to `true` (save before unload). Set `false` to skip saving.
+  - Permission: `cardboard.command.unloadchunks`
+
+### Batch operation tools
+
+- `/cardboard cleanupentities <world> [all|items|projectiles|stands|display|xp]`
+  - Bulk removes entities by category to reduce memory and tick load.
+  - Permission: `cardboard.command.cleanupentities`
+
+- `/cardboard batchteleport <world> <x> <y> <z> [batchSize] [intervalTicks]`
+  - Teleports players in batches to avoid chunk-send spikes.
+  - Permission: `cardboard.command.batchteleport`
+
+- `/cardboard batchteleportcancel`
+  - Cancels an active batched teleport.
+  - Permission: `cardboard.command.batchteleport`
+
 ## Building from source
 
 To compile CardboardMC, you need JDK 21 and an internet connection.

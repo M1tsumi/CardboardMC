@@ -51,3 +51,6 @@ paper-generator.settings.gradle.kts
 
 # Don't track patched vanilla submodules
 paper-server/src/minecraft/
+customization.md
+.gitignore
+development.md

@@ -1,6 +1,7 @@
 package io.papermc.paper.command;
 
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import io.cardboardmc.command.CardboardCommand;
 import io.papermc.paper.command.brigadier.CommandRegistrationFlag;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
@@ -24,6 +25,7 @@ public final class PaperCommands {
     public static void registerCommands(final MinecraftServer server) {
         COMMANDS.put("paper", new PaperCommand("paper"));
         COMMANDS.put("mspt", new MSPTCommand("mspt"));
+        COMMANDS.put("cardboard", new CardboardCommand("cardboard"));
 
         COMMANDS.forEach((s, command) -> {
             server.server.getCommandMap().register(s, "Paper", command);
