@@ -243,6 +243,7 @@ import org.bukkit.permissions.Permission;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginLoadOrder;
 import org.bukkit.plugin.PluginManager;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.ServicesManager;
 import org.bukkit.plugin.SimplePluginManager;
 import org.bukkit.plugin.SimpleServicesManager;
@@ -306,6 +307,9 @@ public final class CraftServer implements Server {
     public final io.papermc.paper.SparksFly spark;
     private final ServerConfiguration serverConfig = new PaperServerConfiguration();
 
+    private final io.cardboardmc.internal.InternalCardboardPlugin cardboard$internalPlugin;
+    private final io.cardboardmc.api.CardboardMinigameServiceImpl cardboard$minigameService;
+
     // Paper start - Folia region threading API
     private final io.papermc.paper.threadedregions.scheduler.FallbackRegionScheduler regionizedScheduler = new io.papermc.paper.threadedregions.scheduler.FallbackRegionScheduler();
     private final io.papermc.paper.threadedregions.scheduler.FoliaAsyncScheduler asyncScheduler = new io.papermc.paper.threadedregions.scheduler.FoliaAsyncScheduler();
@@ -324,6 +328,10 @@ public final class CraftServer implements Server {
     @Override
     public final io.papermc.paper.threadedregions.scheduler.FoliaGlobalRegionScheduler getGlobalRegionScheduler() {
         return this.globalRegionScheduler;
+    }
+
+    public void cardboard$tickMinigameService() {
+        this.cardboard$minigameService.tick();
     }
 
     @Override
@@ -418,7 +426,11 @@ public final class CraftServer implements Server {
         this.pluginManager.paperPluginManager = this.paperPluginManager;
          // Paper end
 
-        CraftRegistry.setMinecraftRegistry(console.registryAccess());
+        this.cardboard$internalPlugin = new io.cardboardmc.internal.InternalCardboardPlugin(this, "CardboardMC", this.serverVersion);
+        this.cardboard$minigameService = new io.cardboardmc.api.CardboardMinigameServiceImpl();
+        this.getServicesManager().register(io.cardboardmc.api.CardboardMinigameService.class, this.cardboard$minigameService, this.cardboard$internalPlugin, ServicePriority.Normal);
+
+         CraftRegistry.setMinecraftRegistry(console.registryAccess());
 
         if (!Main.useConsole) {
             this.getLogger().info("Console input is disabled due to --noconsole command argument");

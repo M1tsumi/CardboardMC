@@ -215,6 +215,17 @@ public class GlobalConfiguration extends ConfigurationPart {
     public class Scoreboards extends ConfigurationPart {
         public boolean trackPluginScoreboards = false;
         public boolean saveEmptyScoreboardTeams = true;
+
+        public OutboundRateLimiter outboundRateLimiter;
+
+        public class OutboundRateLimiter extends ConfigurationPart {
+            public boolean enabled = false;
+            public int flushIntervalTicks = 1;
+            public int maxPacketsPerTick = 75;
+            public boolean deduplicateConsecutivePackets = true;
+            public boolean debugLogging = false;
+            public int debugLoggingIntervalSeconds = 10;
+        }
     }
 
     @SuppressWarnings("unused") // used in postProcess

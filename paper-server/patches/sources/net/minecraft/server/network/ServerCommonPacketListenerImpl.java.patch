@@ -215,12 +215,24 @@
 +        } else if (packet instanceof net.minecraft.network.protocol.game.ClientboundSetDefaultSpawnPositionPacket defaultSpawnPositionPacket && this instanceof ServerGamePacketListenerImpl serverGamePacketListener) {
 +            serverGamePacketListener.player.compassTarget = org.bukkit.craftbukkit.util.CraftLocation.toBukkit(defaultSpawnPositionPacket.respawnData().pos(), serverGamePacketListener.getPlayer().level());
 +        }
++
++        if (this instanceof ServerGamePacketListenerImpl serverGamePacketListener) {
++            final String simpleName = packet.getClass().getSimpleName();
++            final boolean scoreboardPacket = simpleName.equals("ClientboundSetScorePacket")
++                || simpleName.equals("ClientboundResetScorePacket")
++                || simpleName.equals("ClientboundSetObjectivePacket")
++                || simpleName.equals("ClientboundSetDisplayObjectivePacket")
++                || simpleName.equals("ClientboundSetPlayerTeamPacket");
++
++            if (scoreboardPacket && serverGamePacketListener.cardboard$scoreboardOutboundRateLimiter.enqueue(packet)) {
++                return;
++            }
++        }
 +        // CraftBukkit end
          if (packet.isTerminal()) {
              this.close();
          }
-@@ -174,19 +_,114 @@
-         }
+         this.connection.send(packet, sendListener);
      }
  
 +    @Deprecated @io.papermc.paper.annotation.DoNotUse // Paper - kick event causes

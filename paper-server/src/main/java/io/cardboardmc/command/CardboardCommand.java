@@ -1,36 +1,25 @@
 package io.cardboardmc.command;
 
+import io.cardboardmc.api.CardboardMinigameService;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.TicketType;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.chunk.LevelChunk;
 import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.craftbukkit.CraftWorld;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.Display;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.ExperienceOrb;
-import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.Projectile;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.UUID;
 
 import static net.kyori.adventure.text.Component.text;
 
@@ -40,20 +29,23 @@ public final class CardboardCommand extends Command {
     private static final String UNLOAD_CHUNKS_PERMISSION = "cardboard.command.unloadchunks";
     private static final String CLEANUP_ENTITIES_PERMISSION = "cardboard.command.cleanupentities";
     private static final String BATCH_TELEPORT_PERMISSION = "cardboard.command.batchteleport";
+    private static final String TELEPORT_QUEUE_PERMISSION = "cardboard.command.teleportqueue";
 
     private static final AtomicBoolean BATCH_TELEPORT_RUNNING = new AtomicBoolean(false);
+    private static final AtomicReference<UUID> LAST_BATCH_TELEPORT_ID = new AtomicReference<>(null);
 
     public CardboardCommand(final String name) {
         super(name);
         this.description = "CardboardMC related commands";
-        this.usageMessage = "/cardboard unloadchunks <world> [radius] [safe] | cleanupentities <world> [all|items|projectiles|stands|display|xp] | batchteleport <world> <x> <y> <z> [batchSize] [intervalTicks] | batchteleportcancel";
-        this.setPermission(String.join(";", BASE_PERMISSION, UNLOAD_CHUNKS_PERMISSION, CLEANUP_ENTITIES_PERMISSION, BATCH_TELEPORT_PERMISSION));
+        this.usageMessage = "/cardboard unloadchunks <world> [radius] [safe] | cleanupentities <world> [all|items|projectiles|stands|display|xp] | batchteleport <world> <x> <y> <z> [batchSize] [intervalTicks] | batchteleportcancel | teleportqueue";
+        this.setPermission(String.join(";", BASE_PERMISSION, UNLOAD_CHUNKS_PERMISSION, CLEANUP_ENTITIES_PERMISSION, BATCH_TELEPORT_PERMISSION, TELEPORT_QUEUE_PERMISSION));
 
         final var pluginManager = Bukkit.getServer().getPluginManager();
         pluginManager.addPermission(new Permission(BASE_PERMISSION, PermissionDefault.OP));
         pluginManager.addPermission(new Permission(UNLOAD_CHUNKS_PERMISSION, PermissionDefault.OP));
         pluginManager.addPermission(new Permission(CLEANUP_ENTITIES_PERMISSION, PermissionDefault.OP));
         pluginManager.addPermission(new Permission(BATCH_TELEPORT_PERMISSION, PermissionDefault.OP));
+        pluginManager.addPermission(new Permission(TELEPORT_QUEUE_PERMISSION, PermissionDefault.OP));
     }
 
     @Override
@@ -80,6 +72,9 @@ public final class CardboardCommand extends Command {
         if (sub.equals("batchteleportcancel")) {
             return this.executeBatchTeleportCancel(sender);
         }
+        if (sub.equals("teleportqueue")) {
+            return this.executeTeleportQueue(sender);
+        }
 
         sender.sendMessage(text("Usage: " + this.usageMessage, NamedTextColor.RED));
         return false;
@@ -88,7 +83,7 @@ public final class CardboardCommand extends Command {
     @Override
     public List<String> tabComplete(final CommandSender sender, final String alias, final String[] args, final Location location) throws IllegalArgumentException {
         if (args.length == 1) {
-            return io.papermc.paper.command.CommandUtil.getListMatchingLast(sender, args, List.of("unloadchunks", "cleanupentities", "batchteleport", "batchteleportcancel"));
+            return io.papermc.paper.command.CommandUtil.getListMatchingLast(sender, args, List.of("unloadchunks", "cleanupentities", "batchteleport", "batchteleportcancel", "teleportqueue"));
         }
 
         if (args.length >= 2 && args[0].equalsIgnoreCase("unloadchunks")) {
@@ -147,9 +142,6 @@ public final class CardboardCommand extends Command {
             return true;
         }
 
-        final CraftWorld craftWorld = (CraftWorld) world;
-        final ServerLevel level = craftWorld.getHandle();
-
         final int radius;
         if (args.length >= 2) {
             try {
@@ -169,72 +161,13 @@ public final class CardboardCommand extends Command {
             safe = true;
         }
 
-        // Best practice: operate only on already-loaded chunks to avoid chunk loads (and extra memory churn).
-        final Chunk[] loaded = world.getLoadedChunks();
-
-        final int centerX;
-        final int centerZ;
-        if (radius >= 0) {
-            final Location center = world.getSpawnLocation();
-            centerX = center.getBlockX() >> 4;
-            centerZ = center.getBlockZ() >> 4;
-        } else {
-            centerX = 0;
-            centerZ = 0;
+        final CardboardMinigameService service = CardboardMinigameService.get();
+        if (service == null) {
+            sender.sendMessage(text("[CardboardMC] Minigame service unavailable.", NamedTextColor.RED));
+            return true;
         }
 
-        final Deque<Chunk> queue = new ArrayDeque<>(loaded.length);
-        int skipped = 0;
-        for (final Chunk chunk : loaded) {
-            if (radius >= 0) {
-                final int dx = Math.abs(chunk.getX() - centerX);
-                final int dz = Math.abs(chunk.getZ() - centerZ);
-                if (dx <= radius && dz <= radius) {
-                    skipped++;
-                    continue;
-                }
-            }
-            queue.add(chunk);
-        }
-
-        final int totalToUnload = queue.size();
-        sender.sendMessage(text()
-            .append(text("[CardboardMC] ", NamedTextColor.GOLD))
-            .append(text("Queued ", NamedTextColor.GRAY))
-            .append(text(String.valueOf(totalToUnload), NamedTextColor.YELLOW))
-            .append(text(" chunks for unloading in world ", NamedTextColor.GRAY))
-            .append(text(world.getName(), NamedTextColor.YELLOW))
-            .append(text(safe ? " (safe save)" : " (no save)", NamedTextColor.GRAY))
-            .append(text(radius >= 0 ? ", keeping " + radius + "-chunk radius around spawn" : "", NamedTextColor.GRAY))
-            .append(text(skipped > 0 ? " (skipped " + skipped + ")" : "", NamedTextColor.GRAY))
-            .build()
-        );
-
-        // Best method available here: queue unloads (remove PLUGIN ticket) and then purge unloads once.
-        // This avoids forcing chunk loads and avoids per-chunk purge costs.
-        int requested = 0;
-        while (!queue.isEmpty()) {
-            final Chunk chunk = queue.poll();
-            if (chunk == null) {
-                break;
-            }
-
-            // Avoid forcing loads; only operate on still-loaded chunks.
-            if (!world.isChunkLoaded(chunk.getX(), chunk.getZ())) {
-                continue;
-            }
-
-            if (!safe) {
-                final LevelChunk nmsChunk = level.getChunk(chunk.getX(), chunk.getZ());
-                nmsChunk.tryMarkSaved();
-            }
-
-            // Same behavior as CraftWorld#unloadChunkRequest but avoids extra Bukkit lookups.
-            level.getChunkSource().removeTicketWithRadius(TicketType.PLUGIN, new ChunkPos(chunk.getX(), chunk.getZ()), 1);
-            requested++;
-        }
-
-        level.getChunkSource().purgeUnload();
+        final int requested = service.unloadChunks(world, radius, safe);
 
         sender.sendMessage(text()
             .append(text("[CardboardMC] ", NamedTextColor.GOLD))
@@ -266,51 +199,37 @@ public final class CardboardCommand extends Command {
             return true;
         }
 
-        final String mode = (args.length >= 2 ? args[1] : "all").toLowerCase(Locale.ROOT);
-
-        int removed = 0;
-        int scanned = 0;
-
-        for (final Entity entity : world.getEntities()) {
-            scanned++;
-
-            final boolean match = switch (mode) {
-                case "items" -> entity instanceof Item;
-                case "projectiles" -> entity instanceof Projectile;
-                case "stands" -> entity instanceof ArmorStand;
-                case "display" -> entity instanceof Display;
-                case "xp" -> entity instanceof ExperienceOrb;
-                case "all" -> (entity instanceof Item)
-                    || (entity instanceof Projectile)
-                    || (entity instanceof ArmorStand)
-                    || (entity instanceof Display)
-                    || (entity instanceof ExperienceOrb);
-                default -> false;
-            };
-
-            if (!match) {
-                continue;
-            }
-
-            entity.remove();
-            removed++;
-        }
-
-        if (!mode.equals("all") && !mode.equals("items") && !mode.equals("projectiles") && !mode.equals("stands") && !mode.equals("display") && !mode.equals("xp")) {
-            sender.sendMessage(text("Unknown cleanup mode: " + mode, NamedTextColor.RED));
+        final String modeStr = (args.length >= 2 ? args[1] : "all").toLowerCase(Locale.ROOT);
+        final CardboardMinigameService.CleanupMode mode = switch (modeStr) {
+            case "items" -> CardboardMinigameService.CleanupMode.ITEMS;
+            case "projectiles" -> CardboardMinigameService.CleanupMode.PROJECTILES;
+            case "stands" -> CardboardMinigameService.CleanupMode.STANDS;
+            case "display" -> CardboardMinigameService.CleanupMode.DISPLAY;
+            case "xp" -> CardboardMinigameService.CleanupMode.XP;
+            case "all" -> CardboardMinigameService.CleanupMode.ALL;
+            default -> null;
+        };
+        if (mode == null) {
+            sender.sendMessage(text("Unknown cleanup mode: " + modeStr, NamedTextColor.RED));
             return true;
         }
+
+        final CardboardMinigameService service = CardboardMinigameService.get();
+        if (service == null) {
+            sender.sendMessage(text("[CardboardMC] Minigame service unavailable.", NamedTextColor.RED));
+            return true;
+        }
+
+        final int removed = service.cleanupEntities(world, mode);
 
         sender.sendMessage(text()
             .append(text("[CardboardMC] ", NamedTextColor.GOLD))
             .append(text("Removed ", NamedTextColor.GRAY))
             .append(text(String.valueOf(removed), NamedTextColor.YELLOW))
             .append(text(" entities (mode=", NamedTextColor.GRAY))
-            .append(text(mode, NamedTextColor.YELLOW))
+            .append(text(modeStr, NamedTextColor.YELLOW))
             .append(text(") in world ", NamedTextColor.GRAY))
             .append(text(world.getName(), NamedTextColor.YELLOW))
-            .append(text(". Scanned ", NamedTextColor.GRAY))
-            .append(text(String.valueOf(scanned), NamedTextColor.YELLOW))
             .append(text(".", NamedTextColor.GRAY))
             .build()
         );
@@ -324,7 +243,10 @@ public final class CardboardCommand extends Command {
             return true;
         }
 
-        if (BATCH_TELEPORT_RUNNING.compareAndSet(true, false)) {
+        final UUID batchId = LAST_BATCH_TELEPORT_ID.getAndSet(null);
+        final CardboardMinigameService service = CardboardMinigameService.get();
+        if (batchId != null && service != null && service.cancelQueuedTeleport(batchId)) {
+            BATCH_TELEPORT_RUNNING.set(false);
             sender.sendMessage(text().append(text("[CardboardMC] ", NamedTextColor.GOLD)).append(text("Teleport batching cancelled.", NamedTextColor.GRAY)).build());
         } else {
             sender.sendMessage(text().append(text("[CardboardMC] ", NamedTextColor.GOLD)).append(text("No active teleport batching.", NamedTextColor.GRAY)).build());
@@ -396,6 +318,13 @@ public final class CardboardCommand extends Command {
             return true;
         }
 
+        final CardboardMinigameService service = CardboardMinigameService.get();
+        if (service == null) {
+            BATCH_TELEPORT_RUNNING.set(false);
+            sender.sendMessage(text().append(text("[CardboardMC] ", NamedTextColor.GOLD)).append(text("Minigame service unavailable.", NamedTextColor.RED)).build());
+            return true;
+        }
+
         sender.sendMessage(text()
             .append(text("[CardboardMC] ", NamedTextColor.GOLD))
             .append(text("Batch teleporting ", NamedTextColor.GRAY))
@@ -412,42 +341,32 @@ public final class CardboardCommand extends Command {
             .build()
         );
 
-        final MinecraftServer server = MinecraftServer.getServer();
-        final long intervalMs = intervalTicks * 50L;
+        final UUID batchId = service.queueTeleport(players, new Location(world, x, y, z), PlayerTeleportEvent.TeleportCause.COMMAND, batchSize, intervalTicks);
+        LAST_BATCH_TELEPORT_ID.set(batchId);
 
-        final Thread worker = new Thread(() -> {
-            int index = 0;
-            try {
-                while (BATCH_TELEPORT_RUNNING.get() && index < players.size()) {
-                    final int start = index;
-                    final int end = Math.min(players.size(), index + batchSize);
-                    index = end;
+        return true;
+    }
 
-                    server.execute(() -> {
-                        for (int i = start; i < end; i++) {
-                            final Player player = players.get(i);
-                            if (!player.isOnline()) {
-                                continue;
-                            }
-                            if (player.getWorld() != world) {
-                                continue;
-                            }
-                            player.teleport(new Location(world, x, y, z));
-                        }
-                    });
+    private boolean executeTeleportQueue(final CommandSender sender) {
+        if (!sender.hasPermission(TELEPORT_QUEUE_PERMISSION)) {
+            sender.sendMessage(Bukkit.permissionMessage());
+            return true;
+        }
 
-                    if (index < players.size()) {
-                        Thread.sleep(intervalMs);
-                    }
-                }
-            } catch (final InterruptedException ignored) {
-            } finally {
-                BATCH_TELEPORT_RUNNING.set(false);
-            }
-        }, "Cardboard-BatchTeleport");
-        worker.setDaemon(true);
-        worker.start();
+        final CardboardMinigameService service = CardboardMinigameService.get();
+        if (service == null) {
+            sender.sendMessage(text().append(text("[CardboardMC] ", NamedTextColor.GOLD)).append(text("Minigame service unavailable.", NamedTextColor.RED)).build());
+            return true;
+        }
 
+        sender.sendMessage(text()
+            .append(text("[CardboardMC] ", NamedTextColor.GOLD))
+            .append(text("Teleport queue: ", NamedTextColor.GRAY))
+            .append(text("batches=", NamedTextColor.GRAY)).append(text(String.valueOf(service.getTeleportQueueActiveBatches()), NamedTextColor.YELLOW))
+            .append(text(", queuedPlayers=", NamedTextColor.GRAY)).append(text(String.valueOf(service.getTeleportQueueTotalQueuedPlayers()), NamedTextColor.YELLOW))
+            .append(text(", lastTickTeleported=", NamedTextColor.GRAY)).append(text(String.valueOf(service.getTeleportQueueLastTickTeleported()), NamedTextColor.YELLOW))
+            .build()
+        );
         return true;
     }
 }
