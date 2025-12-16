@@ -1,3 +1,4 @@
+
 # CardboardMC
 
 CardboardMC is a Paper fork aimed at making day-to-day server operation smoother: better performance headroom where it matters, clearer visibility when something is going wrong, and small quality-of-life features that reduce guesswork.
@@ -8,7 +9,7 @@ This repository contains the full source for `paper-api` and `paper-server`.
 
 ### Expanded `/tps` monitoring
 
-`/tps` still shows TPS for `1m, 5m, 15m`. On CardboardMC it also includes a few extra, lightweight subcommands that are meant to be safe to run in production and easy to paste into a support thread:
+`/tps` still shows TPS for `1m, 5m, 15m`, and now also supports:
 
 - `/tps mem`
   - Shows JVM memory usage.
